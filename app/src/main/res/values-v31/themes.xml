@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Android 12+：Material 3。
+      动态取色（Material You）由 CampusApp 在运行时通过
+      DynamicColors.applyToActivitiesIfAvailable() 叠加，不在这里用 Theme.Material3.DynamicColors.*
+      —— 那个主题在 Material 1.12 里父主题是 Light，会让深色模式失效。
+    -->
+    <style name="Theme.CampusHub" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorPrimaryContainer">@color/primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/on_primary_container</item>
+        <item name="android:statusBarColor">@color/status_bar</item>
+        <item name="android:windowBackground">@color/window_bg</item>
+    </style>
+</resources>

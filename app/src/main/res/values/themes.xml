@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      默认主题（Android 6 ~ 11）：Material Design（M2）。
+      Android 12+ 由 res/values-v31/themes.xml 覆盖为 Material 3 + 动态取色。
+    -->
+    <style name="Theme.CampusHub" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorSecondary">@color/brand</item>
+        <item name="colorOnSecondary">@color/on_primary</item>
+        <item name="android:statusBarColor">@color/status_bar</item>
+        <item name="android:windowBackground">@color/window_bg</item>
+    </style>
+</resources>

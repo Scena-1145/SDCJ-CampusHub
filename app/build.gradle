@@ -1,0 +1,94 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file('keystore.properties')
+if (keystoreFile.exists()) {
+    keystoreFile.withInputStream { keystoreProps.load(it) }
+}
+
+// 推送配置：留空即视为未配置，App 会正常降级运行。
+// 填入 local.properties 后重新构建即可生效（见 推送配置指南.md）。
+def localProps = new Properties()
+def localFile = rootProject.file('local.properties')
+if (localFile.exists()) {
+    localFile.withInputStream { localProps.load(it) }
+}
+def prop = { String key -> (localProps.getProperty(key) ?: '').trim() }
+def pushFcmAppId     = prop('push.fcm.appId')
+def pushFcmApiKey    = prop('push.fcm.apiKey')
+def pushFcmProjectId = prop('push.fcm.projectId')
+def pushFcmSenderId  = prop('push.fcm.senderId')
+def pushHmsAppId     = prop('push.hms.appId')
+
+android {
+    namespace 'com.scena.campushub'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.scena.campushub"
+        minSdk 23
+        targetSdk 34
+        versionCode 12
+        versionName "1.9.1"
+
+        buildConfigField "String", "PUSH_FCM_APP_ID", "\"${pushFcmAppId}\""
+        buildConfigField "String", "PUSH_FCM_API_KEY", "\"${pushFcmApiKey}\""
+        buildConfigField "String", "PUSH_FCM_PROJECT_ID", "\"${pushFcmProjectId}\""
+        buildConfigField "String", "PUSH_FCM_SENDER_ID", "\"${pushFcmSenderId}\""
+        buildConfigField "String", "PUSH_HMS_APP_ID", "\"${pushHmsAppId}\""
+
+        manifestPlaceholders = [hmsAppIdValue: pushHmsAppId.isBlank() ? "" : "appid=${pushHmsAppId}"]
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreFile.exists()) {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystoreFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.0.1'
+    implementation 'androidx.webkit:webkit:1.11.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+
+    // 推送双通道
+    implementation 'com.google.firebase:firebase-messaging:24.0.0'
+    implementation 'com.huawei.hms:push:6.12.0.300'
+}

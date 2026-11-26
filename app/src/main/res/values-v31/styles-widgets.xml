@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="CampusHub.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:textAllCaps">false</item>
+    </style>
+    <style name="CampusHub.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textAllCaps">false</item>
+    </style>
+    <style name="CampusHub.Input" parent="Widget.Material3.TextInputLayout.OutlinedBox" />
+</resources>

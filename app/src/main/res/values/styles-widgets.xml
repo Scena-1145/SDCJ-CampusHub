@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 控件样式语义名：默认走 M2 实现，Android 12+ 由 values-v31 覆盖为 M3。 -->
+    <style name="CampusHub.Button.Tonal" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="android:textAllCaps">false</item>
+    </style>
+    <style name="CampusHub.Button.Text" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:textAllCaps">false</item>
+    </style>
+    <style name="CampusHub.Input" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox" />
+</resources>

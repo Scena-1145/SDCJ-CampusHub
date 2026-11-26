@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">校园枢纽</string>
+    <string name="tab_dashboard">聚合</string>
+    <string name="tab_campus">校园</string>
+    <string name="tab_chaoxing">学习通</string>
+    <string name="tab_jrcampus">今日校园</string>
+    <string name="notify_listener_label">校园枢纽 · 通知聚合</string>
+    <string name="action_refresh">刷新</string>
+</resources>

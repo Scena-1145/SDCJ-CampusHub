@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  通知栏小图标：必须是纯 alpha 的单色图形。
+  用 ic_launcher（彩色 vector）在部分机型（尤其 Android 9 三星）会渲染成白块或不可见。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2L2,8l10,6l10,-6L12,2zM12,16l-6,-3.6V16l6,3.6l6,-3.6v-3.6L12,16z" />
+</vector>
