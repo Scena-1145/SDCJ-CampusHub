@@ -71,10 +71,19 @@
                     </LinearLayout>
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnCampusLogin"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:minWidth="0dp"
+                        android:text="登录" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnOpenApp"
                         style="@style/CampusHub.Button.Tonal"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:minWidth="0dp"
                         android:text="原 App" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

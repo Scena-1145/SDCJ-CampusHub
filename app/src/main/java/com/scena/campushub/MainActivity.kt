@@ -176,6 +176,9 @@ class MainActivity : AppCompatActivity() {
 
         campus.btnOpenApp.setOnClickListener { openCampusApp() }
         campus.btnCampusRefresh.setOnClickListener { refreshAll() }
+        campus.btnCampusLogin.setOnClickListener {
+            if (store.isLoggedIn()) Dialogs.profile(this, session) { logout() } else showLoginDialog()
+        }
         campus.tvCampusUser.setOnClickListener {
             if (!store.isLoggedIn()) showLoginDialog() else Dialogs.profile(this, session) { logout() }
         }
@@ -695,14 +698,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderCampus(d: Dashboard) {
         val s = session
+        val loggedIn = s != null || store.isLoggedIn()
         campus.tvCampusUser.text = s?.displayName?.takeIf { it.isNotBlank() }
             ?: store.userId.ifBlank { "未登录" }
         campus.tvCampusMeta.text = listOfNotNull(
             store.className.takeIf { it.isNotBlank() },
             s?.professionName?.takeIf { it.isNotBlank() },
-            if (store.isLoggedIn()) "已登录" else null
+            if (loggedIn) "已登录" else null
         ).joinToString(" · ")
         campus.tvCampusSchool.text = s?.schoolName.orEmpty()
+        campus.btnCampusLogin.text = if (loggedIn) "个人资料" else "登录"
 
         val ctx = this
         campus.llCampusCourses.removeAllViews()

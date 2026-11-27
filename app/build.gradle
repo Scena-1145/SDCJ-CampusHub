@@ -31,8 +31,8 @@ android {
         applicationId "com.scena.campushub"
         minSdk 23
         targetSdk 34
-        versionCode 13
-        versionName "1.9.2"
+        versionCode 14
+        versionName "1.9.3"
 
         buildConfigField "String", "PUSH_FCM_APP_ID", "\"${pushFcmAppId}\""
         buildConfigField "String", "PUSH_FCM_API_KEY", "\"${pushFcmApiKey}\""
