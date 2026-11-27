@@ -126,6 +126,14 @@ object ReminderStore {
     fun cachedDate(ctx: Context): String =
         prefs(ctx).getString("courses_date", "") ?: ""
 
+    /** 缓存是不是今天的。空缓存和「昨天的缓存」都算过期。 */
+    fun isCacheFresh(ctx: Context): Boolean = cachedDate(ctx) == todayKey()
+
+    /** 退出登录时调用：本地课表来自账号会话，不该留着继续驱动提醒。 */
+    fun clearCourses(ctx: Context) {
+        prefs(ctx).edit().remove("courses").remove("courses_date").apply()
+    }
+
     fun todayKeyPublic(): String = todayKey()
 }
 

@@ -27,7 +27,7 @@ object Dialogs {
             .show()
     }
 
-    fun profile(ctx: Context, s: LysoftClient.Session?) {
+    fun profile(ctx: Context, s: LysoftClient.Session?, onLogout: () -> Unit = {}) {
         if (s == null) {
             MaterialAlertDialogBuilder(ctx)
                 .setTitle("个人信息")
@@ -53,6 +53,7 @@ object Dialogs {
             .setTitle("个人信息")
             .setMessage(if (text.isBlank()) "未获取到学籍资料。" else text)
             .setPositiveButton("关闭", null)
+            .setNegativeButton("退出登录") { _, _ -> onLogout() }
             .show()
     }
 

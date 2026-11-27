@@ -3,7 +3,7 @@ package com.scena.campushub.reminder
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.scena.campushub.data.Course
+import com.scena.campushub.data.Store
 import com.scena.campushub.push.Notifications
 
 /** 接收课表闹钟，发出本地通知。不依赖任何推送服务。 */
@@ -29,12 +29,14 @@ class ReminderReceiver : BroadcastReceiver() {
         val courses = ReminderStore.cachedCourses(ctx)
         when (intent.action) {
             ACTION_SUMMARY -> {
-                if (courses.isEmpty()) {
-                    // 今天没课，不打扰
-                } else {
-                    Notifications.show(ctx, "今天 ${courses.size} 门课", summaryText(courses))
+                if (!ReminderStore.isCacheFresh(ctx) && Store(ctx).canAutoRefresh()) {
+                    // 缓存还是昨天的课表：接口只给当天数据，只能联网补一次，
+                    // 这条闹钟已经空跑，由刷新任务回来后补发汇总。
+                    ScheduleRefreshJob.refreshNow(ctx, notifySummary = true)
+                } else if (courses.isNotEmpty()) {
+                    Notifications.show(ctx, "今天 ${courses.size} 门课", ReminderScheduler.summaryText(courses))
                 }
-                // 安排下一次汇总
+                // 今天没课且缓存是今天的 → 不打扰
                 ReminderScheduler.reschedule(ctx)
             }
 
@@ -58,13 +60,6 @@ class ReminderReceiver : BroadcastReceiver() {
             }
         }
     }
-
-    private fun summaryText(courses: List<Course>): String =
-        courses.joinToString("\n") { c ->
-            val time = c.start.ifBlank { "第${c.sections}节" }
-            val place = c.room.ifBlank { "" }
-            if (place.isBlank()) "· $time ${c.name}" else "· $time ${c.name} @ $place"
-        }
 
     companion object {
         const val ACTION_SUMMARY = "com.scena.campushub.REMIND_SUMMARY"

@@ -90,9 +90,18 @@ class Store(ctx: Context) {
     }
 
     fun clearSession() {
-        sp.edit().remove("aes_key").remove("only_code").remove("session_key")
-            .remove("user_type").remove("xxdm").apply()
+        sp.edit()
+            .remove("aes_key").remove("only_code").remove("session_key")
+            .remove("user_type").remove("xxdm")
+            .remove("password")
+            .remove("display_name").remove("class_name")
+            .remove("department").remove("school_name").remove("profession")
+            .remove("grade").remove("mobile").remove("identity").remove("bjid")
+            .apply()
     }
+
+    /** 会话过期时能否不打扰用户地自动重登（前提是留着密码）。 */
+    fun canAutoRefresh(): Boolean = userId.isNotBlank() && password.isNotBlank()
 
     fun isLoggedIn(): Boolean = loadSession() != null
 }

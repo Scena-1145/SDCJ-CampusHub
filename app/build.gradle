@@ -31,8 +31,8 @@ android {
         applicationId "com.scena.campushub"
         minSdk 23
         targetSdk 34
-        versionCode 12
-        versionName "1.9.1"
+        versionCode 13
+        versionName "1.9.2"
 
         buildConfigField "String", "PUSH_FCM_APP_ID", "\"${pushFcmAppId}\""
         buildConfigField "String", "PUSH_FCM_API_KEY", "\"${pushFcmApiKey}\""
@@ -56,7 +56,12 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // 只开代码收缩，不混淆（见 proguard-rules.pro 里的 -dontobfuscate）：
+            // R8 若削掉 Firebase / HMS 的反射入口，问题要等到真机推消息时才暴露，
+            // 先把这一步的风险控制住。资源收缩一并显式关掉，避免动态主题取色踩空。
+            minifyEnabled true
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig keystoreFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }

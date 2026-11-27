@@ -9,4 +9,19 @@
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">mcp.sduc.edu.cn</domain>
     </domain-config>
+
+    <!--
+        校内站点（jwxt/ehall/cas/portal/vpn/tsg/mail/www）用的是 *.sduc.edu.cn 证书，
+        签发者 TrustAsia DV TLS RSA CA 2025 由 DigiCert Global Root G2 签发。
+        服务端没下发中间证书，Android 不会像桌面浏览器那样自动去下载，
+        于是报 ERR_CERT_AUTHORITY_INVALID（net_error -202）。
+        这里把这张公开的中间证书补进信任链，主机名校验仍由系统完成。
+    -->
+    <domain-config>
+        <domain includeSubdomains="true">sduc.edu.cn</domain>
+        <trust-anchors>
+            <certificates src="@raw/sduc_ca" />
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>

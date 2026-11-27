@@ -153,11 +153,36 @@
                         style="@style/CardTitle"
                         android:text="全部功能" />
 
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvNetState"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="检测校园网…"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="11sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnNetCheck"
+                            style="@style/CampusHub.Button.Text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:minWidth="0dp"
+                            android:text="重测" />
+                    </LinearLayout>
+
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:text="灰底项需要校园内网或对应系统地址，点击可查看原因"
+                        android:layout_marginTop="2dp"
+                        android:text="成绩、考试、待办等直接在 App 内打开校内系统，登录一次即可"
                         android:textColor="?android:attr/textColorSecondary"
                         android:textSize="11sp" />
 

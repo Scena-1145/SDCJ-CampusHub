@@ -46,7 +46,11 @@ object ReminderScheduler {
 
         // ② 每节课前 15 分钟
         val now = System.currentTimeMillis()
-        ReminderStore.cachedCourses(app).forEachIndexed { i, c ->
+        val cached = ReminderStore.cachedCourses(app)
+        cached.forEachIndexed { i, c ->
+            // 上限必须生效：cancelAll 只清 REQ_COURSE_BASE 起的 MAX_COURSES 个 code，
+            // 超出的闹钟注册了就再也取消不掉。
+            if (i >= MAX_COURSES) return@forEachIndexed
             val trigger = classStartMillis(c)?.minus(LEAD_MINUTES * 60_000L) ?: return@forEachIndexed
             if (trigger > now) {
                 if (setAlarm(app, REQ_COURSE_BASE + i, trigger, ReminderReceiver.ACTION_CLASS, i)) {
@@ -54,9 +58,23 @@ object ReminderScheduler {
                 }
             }
         }
+        if (cached.size > MAX_COURSES) {
+            ReminderStore.appendError(app, "课程 ${cached.size} 门超出闹钟上限 $MAX_COURSES，后面的课未注册提醒")
+        }
+
+        // ③ 课表接口只返回「当天」，App 不打开就拿不到明天的数据 —— 排一个清晨的联网刷新任务兜底
+        ScheduleRefreshJob.scheduleDaily(app)
 
         ReminderStore.setPlanned(app, planned)
     }
+
+    /** 汇总通知的正文，闹钟链路与后台刷新任务共用。 */
+    fun summaryText(courses: List<Course>): String =
+        courses.joinToString("\n") { c ->
+            val time = c.start.ifBlank { "第${c.sections}节" }
+            val place = c.room.ifBlank { "" }
+            if (place.isBlank()) "· $time ${c.name}" else "· $time ${c.name} @ $place"
+        }
 
     /** 立即安排一个 N 秒后的测试提醒，用于在真机上验证整条链路。 */
     fun scheduleTest(ctx: Context, seconds: Int): Boolean {

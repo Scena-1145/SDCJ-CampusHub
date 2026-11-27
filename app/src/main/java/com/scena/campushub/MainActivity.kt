@@ -5,7 +5,9 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -25,13 +27,13 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.scena.campushub.data.CampusApi
 import com.scena.campushub.data.CampusCatalog
 import com.scena.campushub.data.CampusModule
+import com.scena.campushub.data.CampusNet
 import com.scena.campushub.data.Course
 import com.scena.campushub.data.CxCourse
 import com.scena.campushub.data.Dashboard
 import com.scena.campushub.data.DeepLinkProbe
 import com.scena.campushub.data.JrcDeepLinks
 import com.scena.campushub.data.LysoftClient
-import com.scena.campushub.data.ModuleState
 import com.scena.campushub.data.Store
 import com.scena.campushub.databinding.ActivityMainBinding
 import com.scena.campushub.databinding.DialogLoginBinding
@@ -48,6 +50,7 @@ import com.scena.campushub.push.PushState
 import com.scena.campushub.reminder.OemHelper
 import com.scena.campushub.reminder.ReminderScheduler
 import com.scena.campushub.reminder.ReminderStore
+import com.scena.campushub.reminder.ScheduleRefreshJob
 import com.scena.campushub.ui.Bg
 import com.scena.campushub.ui.DashboardRenderer
 import com.scena.campushub.ui.Dialogs
@@ -76,6 +79,7 @@ class MainActivity : AppCompatActivity() {
     private var probeRunning = false
 
     private var pendingRequest: Pair<PermissionRequest, List<String>>? = null
+    private var pendingGeo: Pair<String?, GeolocationPermissions.Callback>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,9 +102,11 @@ class MainActivity : AppCompatActivity() {
         bindHeader()
         bindActions()
         setupWeb()
+        setupWebShell()
         hideProbeWebView()
         setupJrcampus()
         ModuleGrid.render(campus.llModules, CampusCatalog.modules) { onModuleClick(it) }
+        checkCampusNet()
 
         binding.bottomNav.setOnItemSelectedListener { item ->
             show(item.itemId)
@@ -166,11 +172,12 @@ class MainActivity : AppCompatActivity() {
             binding.bottomNav.selectedItemId = R.id.nav_chaoxing
             probeChaoxingCourses()
         }
+        campus.btnNetCheck.setOnClickListener { checkCampusNet() }
 
         campus.btnOpenApp.setOnClickListener { openCampusApp() }
         campus.btnCampusRefresh.setOnClickListener { refreshAll() }
         campus.tvCampusUser.setOnClickListener {
-            if (!store.isLoggedIn()) showLoginDialog() else Dialogs.profile(this, session)
+            if (!store.isLoggedIn()) showLoginDialog() else Dialogs.profile(this, session) { logout() }
         }
 
         dash.swReminder.isChecked = ReminderStore.isEnabled(this)
@@ -195,6 +202,7 @@ class MainActivity : AppCompatActivity() {
                 updateReminderHint()
             } else {
                 ReminderScheduler.cancelAll(this)
+                ScheduleRefreshJob.cancel(this)
                 updateReminderHint()
             }
         }
@@ -326,6 +334,12 @@ class MainActivity : AppCompatActivity() {
             sb.appendLine("  （最后注册时间 $t）")
         }
         sb.appendLine()
+        sb.appendLine("清晨自动刷课表：")
+        sb.appendLine(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) "  ✅ 已排定（需联网，赶在 07:00 汇总之前）"
+            else "  ❌ Android 6 不支持定时后台任务，需每天打开一次 App"
+        )
+        sb.appendLine()
         sb.appendLine("设备：${Build.MANUFACTURER} ${Build.MODEL} / Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
         sb.appendLine("厂商类型：${oem.label}")
         if (OemHelper.needsGuide(oem)) {
@@ -432,17 +446,109 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------ 功能宫格
 
     private fun onModuleClick(m: CampusModule) {
-        when (m.state) {
-            ModuleState.AVAILABLE -> when (m.id) {
-                CampusCatalog.ID_SCHEDULE -> binding.bottomNav.selectedItemId = R.id.nav_dashboard
-                CampusCatalog.ID_PROFILE -> {
-                    if (session == null) showLoginDialog() else Dialogs.profile(this, session)
-                }
-                CampusCatalog.ID_NEWS -> loadNews()
-                else -> Dialogs.info(this, m.name, "该功能尚未接入。")
+        when {
+            m.id == CampusCatalog.ID_SCHEDULE ->
+                binding.bottomNav.selectedItemId = R.id.nav_dashboard
+
+            m.id == CampusCatalog.ID_PROFILE -> {
+                if (session == null) showLoginDialog() else Dialogs.profile(this, session) { logout() }
             }
+
+            m.id == CampusCatalog.ID_NEWS -> loadNews()
+
+            m.openable -> openWeb(m.url!!, m.name)
+
             else -> Dialogs.featureUnavailable(this, m)
         }
+    }
+
+    // ------------------------------------------------------------ 校内系统网页
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebShell() {
+        val wv = binding.webOverlayView
+        val s: WebSettings = wv.settings
+        s.javaScriptEnabled = true
+        s.domStorageEnabled = true
+        s.databaseEnabled = true
+        s.loadWithOverviewMode = true
+        s.useWideViewPort = true
+        s.cacheMode = WebSettings.LOAD_DEFAULT
+        s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        s.setSupportZoom(true)
+        s.builtInZoomControls = true
+        s.displayZoomControls = false
+        s.userAgentString = s.userAgentString + " CampusHub/1.0"
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+        wv.setBackgroundColor(Color.WHITE)
+
+        @Suppress("DEPRECATION")
+        wv.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                binding.progressWeb.visibility = View.VISIBLE
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                binding.progressWeb.visibility = View.GONE
+            }
+
+            @Suppress("DEPRECATION")
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                val uri = Uri.parse(url ?: return false)
+                if (uri.scheme == "http" || uri.scheme == "https") return false
+                return startExternal(uri)
+            }
+        }
+        wv.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                binding.progressWeb.progress = newProgress
+                binding.progressWeb.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
+            }
+        }
+
+        binding.btnWebBack.setOnClickListener { webBack() }
+        binding.btnWebClose.setOnClickListener { closeWeb() }
+    }
+
+    /** 支付宝 / 微信 / 邮件等外部协议交给系统处理。 */
+    private fun startExternal(uri: Uri): Boolean = try {
+        startActivity(Intent(Intent.ACTION_VIEW, uri))
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    }
+
+    private fun isWebOpen(): Boolean = binding.webOverlay.visibility == View.VISIBLE
+
+    private fun openWeb(url: String, title: String) {
+        binding.tvWebTitle.text = title
+        binding.webOverlay.visibility = View.VISIBLE
+        binding.webOverlayView.loadUrl(url)
+    }
+
+    private fun webBack() {
+        val wv = binding.webOverlayView
+        if (wv.canGoBack()) wv.goBack() else closeWeb()
+    }
+
+    private fun closeWeb() {
+        binding.webOverlayView.stopLoading()
+        binding.progressWeb.visibility = View.GONE
+        binding.webOverlay.visibility = View.GONE
+    }
+
+    // ------------------------------------------------------------ 校园网
+
+    private fun checkCampusNet() {
+        campus.tvNetState.text = "正在检测校园网…"
+        Bg.run({ CampusNet.probe() }, { r ->
+            if (!alive()) return@run
+            campus.tvNetState.text = when (r.getOrDefault(CampusNet.State.OUTSIDE)) {
+                CampusNet.State.CAMPUS -> "校园网已连接 · 校内系统直连"
+                else -> "当前不在校园网 · 用 WebVPN 访问内网资源"
+            }
+        })
     }
 
     private fun loadNews() {
@@ -452,6 +558,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         Bg.run({ api.newsList(s) }, { r ->
+            if (!alive()) return@run
             r.onSuccess { items ->
                 Dialogs.news(this, items, if (items.isEmpty()) "服务端未返回数据（该校通知接口需要 yyid 参数）。" else null)
             }.onFailure { t ->
@@ -494,6 +601,7 @@ class MainActivity : AppCompatActivity() {
         btn.isEnabled = false
         btn.text = "登录中…"
         Bg.run({ api.login(user, pass) }, { r ->
+            if (!alive()) return@run
             btn.isEnabled = true
             btn.text = "登录"
             r.onSuccess { s ->
@@ -509,11 +617,27 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    /** 退出登录：连密码和学籍资料一起清掉，并停掉靠课表缓存驱动的提醒。 */
+    private fun logout() {
+        session = null
+        store.clearSession()
+        ReminderStore.clearCourses(this)
+        ReminderScheduler.reschedule(this)
+        renderer.render(Dashboard())
+        renderCampus(Dashboard())
+        updateReminderHint()
+        showLoginDialog()
+    }
+
     // ------------------------------------------------------------ 数据刷新
+
+    /** 后台请求最长可拖到 35s，回填前先确认 Activity 还在，否则弹窗会抛 BadTokenException。 */
+    private fun alive(): Boolean = !isFinishing && !isDestroyed
 
     private fun refreshAll() {
         dash.swipe.isRefreshing = true
         Bg.run({ loadDashboard() }, { r ->
+            if (!alive()) return@run
             dash.swipe.isRefreshing = false
             r.onSuccess { d ->
                 renderer.render(d)
@@ -528,25 +652,28 @@ class MainActivity : AppCompatActivity() {
                 renderer.render(Dashboard(error = t.message ?: "刷新失败"))
                 campus.tvCampusStatus.visibility = View.VISIBLE
                 campus.tvCampusStatus.text = "刷新失败：" + (t.message ?: "网络错误")
+                // 密码已改 / 会话被服务端作废时，给出重新登录入口，而不是让用户对着旧数据发呆
+                if (t is LysoftClient.ApiException && LysoftClient.isSessionDead(t.code)) {
+                    session = null
+                    showLoginDialog()
+                }
             }
         })
     }
 
     private fun loadDashboard(): Dashboard {
         val current = session ?: throw LysoftClient.ApiException("尚未登录")
-        val fresh = try {
+        return try {
             fetch(current)
         } catch (e: LysoftClient.ApiException) {
-            if (store.userId.isNotBlank() && store.password.isNotBlank()) {
-                val ns = api.login(store.userId, store.password)
-                store.saveSession(ns)
-                session = ns
-                fetch(ns)
-            } else {
-                throw e
-            }
+            // 只有会话类错误才值得重走握手 + 登录；0001 之类是接口本身不可用，重登治不了，
+            // 白跑一轮握手还可能触发服务端的风控计数。
+            if (!LysoftClient.isSessionDead(e.code) || !store.canAutoRefresh()) throw e
+            val ns = api.login(store.userId, store.password)
+            store.saveSession(ns)
+            session = ns
+            fetch(ns)
         }
-        return fresh
     }
 
     private fun fetch(s: LysoftClient.Session): Dashboard {
@@ -605,6 +732,8 @@ class MainActivity : AppCompatActivity() {
         s.setGeolocationEnabled(true)
         s.userAgentString = s.userAgentString + " CampusHub/1.0"
         CookieManager.getInstance().setAcceptCookie(true)
+        // 扫码登录的二维码 iframe 挂在第三方域，关掉会导致登录页一直转圈，故保留；
+        // 相机 / 麦克风 / 定位这类传感器能力改由 Config.isTrustedSensorOrigin 收口。
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
         wv.setBackgroundColor(Color.WHITE)
 
@@ -628,6 +757,10 @@ class MainActivity : AppCompatActivity() {
             @SuppressLint("WebViewApiAvailability")
             override fun onPermissionRequest(request: PermissionRequest?) {
                 request ?: return
+                if (!Config.isTrustedSensorOrigin(request.origin?.toString())) {
+                    request.deny()
+                    return
+                }
                 val wanted = request.resources.filter {
                     it == PermissionRequest.RESOURCE_VIDEO_CAPTURE ||
                         it == PermissionRequest.RESOURCE_AUDIO_CAPTURE
@@ -662,7 +795,25 @@ class MainActivity : AppCompatActivity() {
                 origin: String?,
                 callback: GeolocationPermissions.Callback?
             ) {
-                callback?.invoke(origin, true, false)
+                callback ?: return
+                if (!Config.isTrustedSensorOrigin(origin)) {
+                    callback.invoke(origin, false, false)
+                    return
+                }
+                if (hasLocationPermission()) {
+                    callback.invoke(origin, true, false)
+                    return
+                }
+                // 系统运行时权限没到手时，网页定位只会静默失败，必须先申请再回填
+                pendingGeo = origin to callback
+                ActivityCompat.requestPermissions(
+                    this@MainActivity,
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    ),
+                    REQ_WEB_GEO
+                )
             }
         }
         cx.btnCxToggle.setOnClickListener { setCxWebMode(!cxWebMode) }
@@ -695,15 +846,30 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != REQ_WEB_MEDIA) return
-        val pending = pendingRequest
-        pendingRequest = null
-        if (pending == null) return
-        val (request, wanted) = pending
         val allGranted = grantResults.isNotEmpty() &&
             grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-        if (allGranted) request.grant(wanted.toTypedArray()) else request.deny()
+        when (requestCode) {
+            REQ_WEB_MEDIA -> {
+                val pending = pendingRequest
+                pendingRequest = null
+                if (pending == null) return
+                val (request, wanted) = pending
+                if (allGranted) request.grant(wanted.toTypedArray()) else request.deny()
+            }
+
+            REQ_WEB_GEO -> {
+                val pending = pendingGeo
+                pendingGeo = null
+                pending?.let { (origin, callback) -> callback.invoke(origin, allGranted, false) }
+            }
+        }
     }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
 
     /**
      * 用隐藏 WebView 打开课程列表接口，直接读返回的 JSON 文本。
@@ -917,6 +1083,7 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------ 导航
 
     private fun show(itemId: Int) {
+        if (isWebOpen()) closeWeb()
         dash.root.visibility = if (itemId == R.id.nav_dashboard) View.VISIBLE else View.GONE
         campus.root.visibility = if (itemId == R.id.nav_campus) View.VISIBLE else View.GONE
         cx.root.visibility = if (itemId == R.id.nav_chaoxing) View.VISIBLE else View.GONE
@@ -926,6 +1093,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         when {
+            isWebOpen() -> webBack()
             cx.root.visibility == View.VISIBLE && cxWebMode && cx.webView.canGoBack() ->
                 cx.webView.goBack()
             cx.root.visibility == View.VISIBLE -> binding.bottomNav.selectedItemId = R.id.nav_dashboard
@@ -943,10 +1111,15 @@ class MainActivity : AppCompatActivity() {
         if (::cx.isInitialized) {
             cx.webView.destroy()
         }
+        if (::binding.isInitialized) {
+            binding.webOverlay.removeView(binding.webOverlayView)
+            binding.webOverlayView.destroy()
+        }
         super.onDestroy()
     }
 
     companion object {
         private const val REQ_WEB_MEDIA = 2001
+        private const val REQ_WEB_GEO = 2002
     }
 }

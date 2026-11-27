@@ -240,5 +240,14 @@ class LysoftClient(private val ctx: Context) {
     companion object {
         const val CLIENT_VERSION = "3.2.0"
         const val DEFAULT_SCHOOL_ID = "SDCJ"
+
+        /**
+         * 会话已作废的错误码：`0006` = 服务端解密数据出错（onlyCode / AES 密钥失效），
+         * `401` / `403` 由 HTTP 层抛出，握手在本地断掉时 code 是空串。
+         * 其余如 `0001`「系统异常」属于接口本身不可用，重登治不了它。
+         */
+        private val SESSION_DEAD_CODES = setOf("", "0006", "401", "403")
+
+        fun isSessionDead(code: String): Boolean = code in SESSION_DEAD_CODES
     }
 }
